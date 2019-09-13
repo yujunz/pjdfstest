@@ -1,0 +1,29 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v1
+    
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install build-essential autoconf automake gcc make ntpdate
+    - name: Build
+      run: |
+        autoreconf -ifs
+        ./configure
+        make pjdfstest
+    
+    - name: Sync time
+      run: ntpdate -q pool.ntp.org
+
+    - name: Test local file system
+      run: |
+        cd $(mktemp -d)
+        sudo prove -rv ~/pjdfstest/tests
