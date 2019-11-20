@@ -30,7 +30,7 @@ jobs:
     - name: Test local file system
       run: |
         cd $(mktemp -d)
-        sudo prove -rv ${GITHUB_WORKSPACE}/tests || true
+        sudo prove -rv ${GITHUB_WORKSPACE}/tests || true # ignore test result
         mount | grep "^/dev"
         uname -a
 
@@ -65,6 +65,51 @@ jobs:
         sudo ./juicefs auth $JFS_NAME --token $JFS_TOKEN --accesskey $JFS_ACCESSKEY --secretkey $JFS_SECRETKEY
         sudo ./juicefs mount $JFS_NAME /jfs
         cd /jfs
-        sudo prove -rv ${GITHUB_WORKSPACE}/tests || true
-        ${GITHUB_WORKSPACE}/juicefs version
+        sudo prove -rv ${GITHUB_WORKSPACE}/tests || true # ignore test result
         uname -a
+        ${GITHUB_WORKSPACE}/juicefs version
+
+  goofys:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+
+    # TODO: use custom action to build pjdfstest instead of copy & paste
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install build-essential autoconf automake gcc make ntpdate
+
+    - name: Build
+      run: |
+        autoreconf -ifs
+        ./configure
+        make pjdfstest
+
+    - name: Sync time
+      run: ntpdate -q pool.ntp.org
+
+    - name: Mount goofys
+      env:
+        AWS_S3_BUCKET: juicefs-posix-test
+        AWS_ACCESS_KEY_ID: AKIA4DLXAUBGWSEUSSPE
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        GOOFYS_MOUNTPOINT: mnt
+      run: |
+        curl -sSLO https://github.com/kahing/goofys/releases/download/v0.23.1/goofys
+        chmod +x goofys
+        mkdir $GOOFYS_MOUNTPOINT
+        ./goofys $AWS_S3_BUCKET:goofys/ $GOOFYS_MOUNTPOINT
+
+    - name: Test goofys
+      env:
+        GOOFYS_MOUNTPOINT: mnt
+      run: |
+        cd $GOOFYS_MOUNTPOINT
+        sudo prove -rv ${GITHUB_WORKSPACE}/tests || true # ignore test result
+
+    - name: Print test environment
+      run: |
+        uname -a
+        ${GITHUB_WORKSPACE}/goofys -v
