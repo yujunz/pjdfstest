@@ -6,7 +6,7 @@ on:
     - tests
 
 jobs:
-  build:
+  ext4:
 
     runs-on: ubuntu-latest
 
@@ -32,4 +32,39 @@ jobs:
         cd $(mktemp -d)
         sudo prove -rv ${GITHUB_WORKSPACE}/tests || true
         mount | grep "^/dev"
+        uname -a
+
+  juicefs:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install build-essential autoconf automake gcc make ntpdate
+
+    - name: Build
+      run: |
+        autoreconf -ifs
+        ./configure
+        make pjdfstest
+
+    - name: Sync time
+      run: ntpdate -q pool.ntp.org
+
+    - name: Test juicefs
+      env:
+        JFS_NAME: posix-test
+        JFS_TOKEN: ${{ secrets.JFS_TOKEN }}
+        JFS_ACCESSKEY: AKIA4DLXAUBGWSEUSSPE
+        JFS_SECRETKEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      run: |
+        curl -L https://juicefs.com/static/juicefs -o juicefs && chmod +x juicefs
+        sudo ./juicefs auth $JFS_NAME --token $JFS_TOKEN --accesskey $JFS_ACCESSKEY --secretkey $JFS_SECRETKEY
+        sudo ./juicefs mount $JFS_NAME /jfs
+        cd /jfs
+        sudo prove -rv ${GITHUB_WORKSPACE}/tests || true
+        ${GITHUB_WORKSPACE}/juicefs version
         uname -a
